@@ -1,116 +1,167 @@
-import random
 import pygame
+import os
+import sys
 
-class Board:
-    # создание поля
-    def __init__(self, width, height):
-        self.width = width
-        self.height = height
-        self.board = [[0] * width for _ in range(height)]
-        # значения по умолчанию
-        self.left = 10
-        self.top = 10
-        self.cell_size = 30
 
-    def set_view(self, left, top, cell_size):
-        self.left = left
-        self.top = top
-        self.cell_size = cell_size
+def load_image(name, color_key=None):
+    fullname = os.path.join('data', name)
+    try:
+        image = pygame.image.load(fullname)
+    except pygame.error as message:
+        print('Не удаётся загрузить:', name)
+        raise SystemExit(message)
+    image = image.convert_alpha()
+    if color_key is not None:
+        if color_key == -1:
+            color_key = image.get_at((0, 0))
+        image.set_colorkey(color_key)
+    return image
 
-    def render(self, screen):
-        for y in range(self.height):
-            for x in range(self.width):
-                pygame.draw.rect(screen, pygame.Color(255, 255, 255),
-                                 (x * self.cell_size + self.left,
-                                 y * self.cell_size + self.top, self.cell_size, self.cell_size),
-                                 1)
 
-    def get_cell(self, mouse_pos):
-        x = (mouse_pos[0] - self.left) // self.cell_size + 1
-        y = (mouse_pos[1] - self.top) // self.cell_size + 1
-        if (x < 1 or x > self.width) or (y < 1 or y > self.height):
-            return None
-        return x, y
+pygame.init()
+screen_size = (800, 800)
+screen = pygame.display.set_mode(screen_size)
+FPS = 50
 
-    def on_click(self, cell):
+tile_images = {
+    'wall': load_image('wall.png'),
+    'empty': load_image('free.png')
+}
+player_image = load_image('pl.png')
+
+tile_width = tile_height = 50
+
+
+class ScreenFrame(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.rect = (0, 0, 500, 500)
+
+
+class SpriteGroup(pygame.sprite.Group):
+    def __init__(self):
+        super().__init__()
+
+    def get_event(self, event):
+        for sprite in self:
+            sprite.get_event(event)
+
+
+class Sprite(pygame.sprite.Sprite):
+    def __init__(self, group):
+        super().__init__(group)
+        self.rect = None
+
+    def get_event(self, event):
         pass
 
-    def get_click(self, mouse_pos):
-        cell = self.get_cell(mouse_pos)
-        self.on_click(cell)
+
+class Tile(Sprite):
+    def __init__(self, tile_type, pos_x, pos_y):
+        super().__init__(sprite_group)
+        self.image = tile_images[tile_type]
+        self.rect = self.image.get_rect().move(
+            tile_width * pos_x, tile_height * pos_y)
 
 
-class Minesweeper(Board):
-    def __init__(self, width, height, n):
-        super().__init__(width, height)
-        self.board = [[-1] * width for _ in range(height)]
-        i = 0
-        while i < n:
-            x = random.randint(0, self.width - 1)
-            y = random.randint(0, self.height - 1)z
-            if self.board[y][x] == -1:
-                self.board[y][x] = 10
-                i += 1
+class Player(Sprite):
+    def __init__(self, pos_x, pos_y):
+        super().__init__(hero_group)
+        self.image = player_image
+        self.rect = self.image.get_rect().move(
+            tile_width * pos_x + 5, tile_height * pos_y + 5)
+        self.pos = (pos_x, pos_y)
 
-    def open_cell(self, cell):
-        x, y = cell
-        x -= 1
-        y -= 1
-        if self.board[y][x] == 10:
-            return
-        s = 0
-        for dy in range(-1, 2):
-            for dx in range(-1, 2):
-                if x + dx < 0 or x + dx >= self.width or y + dy < 0 or y + dy >= self.height:
-                    continue
-                if self.board[y + dy][x + dx] == 10:
-                    s += 1
-        self.board[y][x] = s
-
-    def on_click(self, cell):
-        self.open_cell(cell)
-
-    def render(self, screen):
-        for y in range(self.height):
-            for x in range(self.width):
-                if self.board[y][x] == 10:
-                    pygame.draw.rect(screen, pygame.Color("red"),
-                                     (x * self.cell_size + self.left, y * self.cell_size + self.top,
-                                      self.cell_size, self.cell_size))
-                if self.board[y][x] >= 0 and self.board[y][x] != 10:
-                    font = pygame.font.Font(None, self.cell_size - 6)
-                    text = font.render(str(self.board[y][x]), 1, (100, 255, 100))
-                    screen.blit(text, (
-                        x * self.cell_size + self.left + 3, y * self.cell_size + self.top + 3))
-                pygame.draw.rect(screen, pygame.Color(255, 255, 255),
-                                 (x * self.cell_size + self.left, y * self.cell_size + self.top,
-                                  self.cell_size, self.cell_size), 1)
+    def move(self, x, y):
+        self.pos = (x, y)
+        self.rect = self.image.get_rect().move(
+            tile_width * self.pos[0] + 5, tile_height * self.pos[1] + 5)
 
 
-def main():
-    pygame.init()
-    size = 320, 470
-    screen = pygame.display.set_mode(size)
-    clock = pygame.time.Clock()
-    pygame.display.set_caption('grandfather of sapyor')
-    board = Minesweeper(10, 15, 10)
-    board.set_view(10, 10, 30)
-    time_on = False
-    ticks = 0
-    running = True
-    while running:
+player = None
+running = True
+clock = pygame.time.Clock()
+sprite_group = SpriteGroup()
+hero_group = SpriteGroup()
+
+
+def terminate():
+    pygame.quit()
+    sys.exit
+
+
+def start_screen():
+    fon = pygame.transform.scale(load_image('fon.jpg'), screen_size)
+    screen.blit(fon, (0, 0))
+    while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                running = False
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                board.get_click(event.pos)
-        screen.fill((0, 0, 0))
-        board.render(screen)
+                terminate()
+            elif event.type == pygame.KEYDOWN or \
+                    event.type == pygame.MOUSEBUTTONDOWN:
+                return
         pygame.display.flip()
-        clock.tick(50)
-        ticks += 1
-    pygame.quit()
+        clock.tick(FPS)
 
 
-if __name__ == '__main__':
-    main()
+def load_level(filename):
+    filename = "data/" + filename
+    with open(filename, 'r') as mapFile:
+        level_map = [line.strip() for line in mapFile]
+    max_width = max(map(len, level_map))
+    return list(map(lambda x: list(x.ljust(max_width, '.')), level_map))
+
+
+def generate_level(level):
+    new_player, x, y = None, None, None
+    for y in range(len(level)):
+        for x in range(len(level[y])):
+            if level[y][x] == '.':
+                Tile('empty', x, y)
+            elif level[y][x] == '#':
+                Tile('wall', x, y)
+            elif level[y][x] == '@':
+                Tile('empty', x, y)
+                new_player = Player(x, y)
+                level[y][x] = "."
+    return new_player, x, y
+
+
+def move(hero, movement):
+    x, y = hero.pos
+    if movement == "up":
+        if y > 0 and level_map[y - 1][x] == ".":
+            hero.move(x, y - 1)
+    elif movement == "down":
+        if y < max_y - 1 and level_map[y + 1][x] == ".":
+            hero.move(x, y + 1)
+    elif movement == "left":
+        if x > 0 and level_map[y][x - 1] == ".":
+            hero.move(x - 1, y)
+    elif movement == "right":
+        if x < max_x - 1 and level_map[y][x + 1] == ".":
+            hero.move(x + 1, y)
+
+
+start_screen()
+level_map = load_level("map.map")
+hero, max_x, max_y = generate_level(level_map)
+while running:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_UP:
+                move(hero, "up")
+            elif event.key == pygame.K_DOWN:
+                move(hero, "down")
+            elif event.key == pygame.K_LEFT:
+                move(hero, "left")
+            elif event.key == pygame.K_RIGHT:
+                move(hero, "right")
+    screen.fill(pygame.Color("black"))
+    sprite_group.draw(screen)
+    hero_group.draw(screen)
+    clock.tick(FPS)
+    pygame.display.flip()
+pygame.quit()
