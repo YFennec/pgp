@@ -2,6 +2,9 @@ import pygame
 import os
 import sys
 
+level = 1
+clock_counter = 0
+
 
 def load_image(name, color_key=None):
     fullname = os.path.join('data', name)
@@ -19,13 +22,13 @@ def load_image(name, color_key=None):
 
 
 pygame.init()
-screen_size = (800, 800)
+screen_size = (1024, 768)
 screen = pygame.display.set_mode(screen_size)
 FPS = 50
 
 tile_images = {
     'wall': load_image('wall.png'),
-    'empty': load_image('free.png')
+    'empty': load_image(f'free{level}.png')
 }
 player_image = load_image('pl.png')
 
@@ -78,6 +81,35 @@ class Player(Sprite):
             tile_width * self.pos[0] + 5, tile_height * self.pos[1] + 5)
 
 
+class AnimatedSprite(pygame.sprite.Sprite):
+    def __init__(self, sheet, columns, rows, x, y, pos_x, pos_y):
+        super().__init__(hero_group)
+        self.frames = []
+        self.cut_sheet(sheet, columns, rows)
+        self.cur_frame = 0
+        self.image = self.frames[self.cur_frame]
+        self.rect = self.rect.move(x, y)
+        self.pos = (pos_x, pos_y)
+
+    def cut_sheet(self, sheet, columns, rows):
+        self.rect = pygame.Rect(0, 0, sheet.get_width() // columns,
+                                sheet.get_height() // rows)
+        for j in range(rows):
+            for i in range(columns):
+                frame_location = (self.rect.w * i, self.rect.h * j)
+                self.frames.append(sheet.subsurface(pygame.Rect(
+                    frame_location, self.rect.size)))
+
+    def update(self):
+        self.cur_frame = (self.cur_frame + 1) % len(self.frames)
+        self.image = self.frames[self.cur_frame]
+
+    def move(self, x, y):
+        self.pos = (x, y)
+        self.rect = self.image.get_rect().move(
+            tile_width * self.pos[0] + 5, tile_height * self.pos[1] + 5)
+
+
 player = None
 running = True
 clock = pygame.time.Clock()
@@ -91,9 +123,31 @@ def terminate():
 
 
 def start_screen():
-    fon = pygame.transform.scale(load_image('fon.jpg'), screen_size)
+    clock_counter = 0
+    fon = pygame.transform.scale(load_image('fon/fon.jpg'), screen_size)
     screen.blit(fon, (0, 0))
+    fon_sprites = []
+    for sprite in '7_1 7_2 7_3 7_4 7_5 7_6 7_7'.split()[::-1]:
+        fon_sprites.append(load_image(f'fon/{sprite}.png'))
+    x, y = 300, 270
+    for sprite in fon_sprites:
+        sprite = pygame.transform.scale(sprite, (136, 258))
+        screen.blit(sprite, (x, y))
+        x -= 35
+        y -= 20
+    i = 1
+    i1 = 1
     while True:
+        screen2 = pygame.Surface(screen.get_size())
+        screen2.blit(fon, (0, 0))
+        x, y = 300, 270
+        dx, dy = 1, 0.3
+        for sprite in fon_sprites:
+            sprite = pygame.transform.scale(sprite, (136, 258))
+            screen2.blit(sprite, (x, y))
+            x -= int(dx * i)
+            y -= int(dy * i)
+        screen.blit(screen2, (0, 0))
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 terminate()
@@ -102,6 +156,13 @@ def start_screen():
                 return
         pygame.display.flip()
         clock.tick(FPS)
+        clock_counter += 1
+        if clock_counter % 5 == 0:
+            if i == 15:
+                i1 = -1
+            elif i == 1:
+                i1 = 1
+            i += i1
 
 
 def load_level(filename):
@@ -122,7 +183,7 @@ def generate_level(level):
                 Tile('wall', x, y)
             elif level[y][x] == '@':
                 Tile('empty', x, y)
-                new_player = Player(x, y)
+                new_player = AnimatedSprite(load_image("player_animate.png"), 7, 2, 40, 40, x, y)
                 level[y][x] = "."
     return new_player, x, y
 
@@ -162,6 +223,9 @@ while running:
     screen.fill(pygame.Color("black"))
     sprite_group.draw(screen)
     hero_group.draw(screen)
+    if clock_counter % 5 == 0:
+        hero_group.update()
     clock.tick(FPS)
     pygame.display.flip()
+    clock_counter += 1
 pygame.quit()
