@@ -27,6 +27,21 @@ def load_image(name, color_key=None):
     return image
 
 
+def next_level():
+    global level
+    global level_map
+    global hero
+    global max_x, max_y
+    with open('data/maps/progress.json', 'w') as file:
+        level += 1
+        if level > 7:
+            level = 'end screen'
+        else:
+            json.dump({"level": level}, file)
+    level_map = load_level(f"maps/map{level}.map")
+    hero, max_x, max_y = generate_level(level_map)
+
+
 pygame.init()
 screen_size = (1050, 800)
 screen = pygame.display.set_mode(screen_size)
@@ -217,25 +232,25 @@ def move(hero, movement):
             hero.move(x, y - 1)
         elif x < max_x - 1 and level_map[y - 1][x] == "%":
             hero.move(x, y - 1)
-            sys.exit()
+            next_level()
     elif movement == "down":
         if y < max_y - 1 and level_map[y + 1][x] == ".":
             hero.move(x, y + 1)
         elif x < max_x - 1 and level_map[y + 1][x] == "%":
             hero.move(x, y + 1)
-            sys.exit()
+            next_level()
     elif movement == "left":
         if x > 0 and level_map[y][x - 1] == ".":
             hero.move(x - 1, y)
         elif x < max_x - 1 and level_map[y][x - 1] == "%":
             hero.move(x - 1, y)
-            sys.exit()
+            next_level()
     elif movement == "right":
         if x < max_x - 1 and level_map[y][x + 1] == ".":
             hero.move(x + 1, y)
         elif x < max_x - 1 and level_map[y][x + 1] == "%":
             hero.move(x + 1, y)
-            sys.exit()
+            next_level()
 
 
 start_screen()
