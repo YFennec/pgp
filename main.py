@@ -3,12 +3,15 @@ import os
 import sys
 import json
 
-with open('data/maps/progress.json', 'w') as file:
-    try:
-        level = json.load(file)['level']
-    except Exception:
+file = open('data/maps/progress.json')
+try:
+    level = json.load(file)['level']
+except Exception:
+    file.close()
+    with open('data/maps/progress.json', 'w') as file:
         json.dump({'level': 1}, file)
         level = 1
+
 clock_counter = 0
 
 
@@ -32,12 +35,20 @@ def next_level():
     global level_map
     global hero
     global max_x, max_y
+    global tile_images
+    global sprite_groups, sprite_group, hero_group, end_portal
     with open('data/maps/progress.json', 'w') as file:
         level += 1
         if level > 7:
             level = 'end screen'
         else:
             json.dump({"level": level}, file)
+    sprite_groups = [
+        sprite_group := SpriteGroup(),
+        hero_group := SpriteGroup(),
+        end_portal := SpriteGroup()
+    ]
+    tile_images['empty'] = load_image(f'sprites/free{level}.png')
     level_map = load_level(f"maps/map{level}.map")
     hero, max_x, max_y = generate_level(level_map)
 
@@ -109,13 +120,13 @@ class AnimatedSpriteHero(pygame.sprite.Sprite):
     def update(self):
         self.cur_frame = (self.cur_frame + 1) % len(self.frames)
         self.image = self.frames[self.cur_frame]
-        if level_map[self.pos[0]][self.pos[1]] == '%':
-            sys.exit()
 
     def move(self, x, y):
         self.pos = (x, y)
         self.rect = self.image.get_rect().move(
             tile_width * self.pos[0] + 5, tile_height * self.pos[1] + 5)
+        if level_map[self.pos[1]][self.pos[0]] == '%':
+            next_level()
 
 
 class AnimatedSpriteEndPortal(pygame.sprite.Sprite):
@@ -191,7 +202,7 @@ def start_screen():
         pygame.display.flip()
         clock.tick(FPS)
         clock_counter += 1
-        if clock_counter % 5 == 0:
+        if clock_counter % 3 == 0:
             if i == 15:
                 i1 = -1
             elif i == 1:
@@ -220,7 +231,7 @@ def generate_level(level):
                 new_player = AnimatedSpriteHero(load_image("sprites/player_animate.png"), 7, 2, x, y)
                 level_map[y][x] = "."
             elif level[y][x] == '%':
-                end_portal = AnimatedSpriteEndPortal(load_image('sprites/end_portal_animate.png'), 6, 2, x, y)
+                AnimatedSpriteEndPortal(load_image('sprites/end_portal_animate.png'), 6, 2, x, y)
                 level_map[y][x] = "%"
     return new_player, x, y
 
@@ -232,25 +243,21 @@ def move(hero, movement):
             hero.move(x, y - 1)
         elif x < max_x - 1 and level_map[y - 1][x] == "%":
             hero.move(x, y - 1)
-            next_level()
     elif movement == "down":
         if y < max_y - 1 and level_map[y + 1][x] == ".":
             hero.move(x, y + 1)
         elif x < max_x - 1 and level_map[y + 1][x] == "%":
             hero.move(x, y + 1)
-            next_level()
     elif movement == "left":
         if x > 0 and level_map[y][x - 1] == ".":
             hero.move(x - 1, y)
         elif x < max_x - 1 and level_map[y][x - 1] == "%":
             hero.move(x - 1, y)
-            next_level()
     elif movement == "right":
         if x < max_x - 1 and level_map[y][x + 1] == ".":
             hero.move(x + 1, y)
         elif x < max_x - 1 and level_map[y][x + 1] == "%":
             hero.move(x + 1, y)
-            next_level()
 
 
 start_screen()
