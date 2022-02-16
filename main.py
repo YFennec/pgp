@@ -1,8 +1,14 @@
 import pygame
 import os
 import sys
+import json
 
-level = 1
+with open('data/maps/progress.json', 'w') as file:
+    try:
+        level = json.load(file)['level']
+    except Exception:
+        json.dump({'level': 1}, file)
+        level = 1
 clock_counter = 0
 
 
@@ -22,7 +28,7 @@ def load_image(name, color_key=None):
 
 
 pygame.init()
-screen_size = (1024, 768)
+screen_size = (1050, 800)
 screen = pygame.display.set_mode(screen_size)
 FPS = 50
 
@@ -30,7 +36,6 @@ tile_images = {
     'wall': load_image('wall.png'),
     'empty': load_image(f'free{level}.png')
 }
-player_image = load_image('pl.png')
 
 tile_width = tile_height = 50
 
@@ -67,20 +72,6 @@ class Tile(Sprite):
             tile_width * pos_x, tile_height * pos_y)
 
 
-class Player(Sprite):
-    def __init__(self, pos_x, pos_y):
-        super().__init__(hero_group)
-        self.image = player_image
-        self.rect = self.image.get_rect().move(
-            tile_width * pos_x + 5, tile_height * pos_y + 5)
-        self.pos = (pos_x, pos_y)
-
-    def move(self, x, y):
-        self.pos = (x, y)
-        self.rect = self.image.get_rect().move(
-            tile_width * self.pos[0] + 5, tile_height * self.pos[1] + 5)
-
-
 class AnimatedSprite(pygame.sprite.Sprite):
     def __init__(self, sheet, columns, rows, x, y, pos_x, pos_y):
         super().__init__(hero_group)
@@ -88,7 +79,7 @@ class AnimatedSprite(pygame.sprite.Sprite):
         self.cut_sheet(sheet, columns, rows)
         self.cur_frame = 0
         self.image = self.frames[self.cur_frame]
-        self.rect = self.rect.move(x, y)
+        self.rect = self.rect.move(tile_width * pos_x + 5, tile_height * pos_y + 5)
         self.pos = (pos_x, pos_y)
 
     def cut_sheet(self, sheet, columns, rows):
@@ -205,7 +196,7 @@ def move(hero, movement):
 
 
 start_screen()
-level_map = load_level("map.map")
+level_map = load_level(f"maps/map{level}.map")
 hero, max_x, max_y = generate_level(level_map)
 while running:
     for event in pygame.event.get():
