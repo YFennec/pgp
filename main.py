@@ -33,8 +33,8 @@ screen = pygame.display.set_mode(screen_size)
 FPS = 50
 
 tile_images = {
-    'wall': load_image('wall.png'),
-    'empty': load_image(f'free{level}.png')
+    'wall': load_image('sprites/wall.png'),
+    'empty': load_image(f'sprites/free{level}.png')
 }
 
 tile_width = tile_height = 50
@@ -72,8 +72,8 @@ class Tile(Sprite):
             tile_width * pos_x, tile_height * pos_y)
 
 
-class AnimatedSprite(pygame.sprite.Sprite):
-    def __init__(self, sheet, columns, rows, x, y, pos_x, pos_y):
+class AnimatedSpriteHero(pygame.sprite.Sprite):
+    def __init__(self, sheet, columns, rows, pos_x, pos_y):
         super().__init__(hero_group)
         self.frames = []
         self.cut_sheet(sheet, columns, rows)
@@ -94,6 +94,8 @@ class AnimatedSprite(pygame.sprite.Sprite):
     def update(self):
         self.cur_frame = (self.cur_frame + 1) % len(self.frames)
         self.image = self.frames[self.cur_frame]
+        if level_map[self.pos[0]][self.pos[1]] == '%':
+            sys.exit()
 
     def move(self, x, y):
         self.pos = (x, y)
@@ -101,11 +103,37 @@ class AnimatedSprite(pygame.sprite.Sprite):
             tile_width * self.pos[0] + 5, tile_height * self.pos[1] + 5)
 
 
+class AnimatedSpriteEndPortal(pygame.sprite.Sprite):
+    def __init__(self, sheet, columns, rows, pos_x, pos_y):
+        super().__init__(end_portal)
+        self.frames = []
+        self.cut_sheet(sheet, columns, rows)
+        self.cur_frame = 0
+        self.image = self.frames[self.cur_frame]
+        self.rect = self.rect.move(tile_width * pos_x, tile_height * pos_y)
+
+    def cut_sheet(self, sheet, columns, rows):
+        self.rect = pygame.Rect(0, 0, sheet.get_width() // columns,
+                                sheet.get_height() // rows)
+        for j in range(rows):
+            for i in range(columns):
+                frame_location = (self.rect.w * i, self.rect.h * j)
+                self.frames.append(sheet.subsurface(pygame.Rect(
+                    frame_location, self.rect.size)))
+
+    def update(self):
+        self.cur_frame = (self.cur_frame + 1) % len(self.frames)
+        self.image = self.frames[self.cur_frame]
+
+
 player = None
 running = True
 clock = pygame.time.Clock()
-sprite_group = SpriteGroup()
-hero_group = SpriteGroup()
+sprite_groups = [
+    sprite_group := SpriteGroup(),
+    hero_group := SpriteGroup(),
+    end_portal := SpriteGroup()
+]
 
 
 def terminate():
@@ -174,8 +202,11 @@ def generate_level(level):
                 Tile('wall', x, y)
             elif level[y][x] == '@':
                 Tile('empty', x, y)
-                new_player = AnimatedSprite(load_image("player_animate.png"), 7, 2, 40, 40, x, y)
-                level[y][x] = "."
+                new_player = AnimatedSpriteHero(load_image("sprites/player_animate.png"), 7, 2, x, y)
+                level_map[y][x] = "."
+            elif level[y][x] == '%':
+                end_portal = AnimatedSpriteEndPortal(load_image('sprites/end_portal_animate.png'), 6, 2, x, y)
+                level_map[y][x] = "%"
     return new_player, x, y
 
 
@@ -184,15 +215,27 @@ def move(hero, movement):
     if movement == "up":
         if y > 0 and level_map[y - 1][x] == ".":
             hero.move(x, y - 1)
+        elif x < max_x - 1 and level_map[y - 1][x] == "%":
+            hero.move(x, y - 1)
+            sys.exit()
     elif movement == "down":
         if y < max_y - 1 and level_map[y + 1][x] == ".":
             hero.move(x, y + 1)
+        elif x < max_x - 1 and level_map[y + 1][x] == "%":
+            hero.move(x, y + 1)
+            sys.exit()
     elif movement == "left":
         if x > 0 and level_map[y][x - 1] == ".":
             hero.move(x - 1, y)
+        elif x < max_x - 1 and level_map[y][x - 1] == "%":
+            hero.move(x - 1, y)
+            sys.exit()
     elif movement == "right":
         if x < max_x - 1 and level_map[y][x + 1] == ".":
             hero.move(x + 1, y)
+        elif x < max_x - 1 and level_map[y][x + 1] == "%":
+            hero.move(x + 1, y)
+            sys.exit()
 
 
 start_screen()
@@ -212,10 +255,12 @@ while running:
             elif event.key == pygame.K_RIGHT:
                 move(hero, "right")
     screen.fill(pygame.Color("black"))
-    sprite_group.draw(screen)
-    hero_group.draw(screen)
+    for group in sprite_groups:
+        group.draw(screen)
     if clock_counter % 5 == 0:
         hero_group.update()
+    if clock_counter % 3 == 0:
+        end_portal.update()
     clock.tick(FPS)
     pygame.display.flip()
     clock_counter += 1
