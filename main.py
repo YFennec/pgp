@@ -48,9 +48,16 @@ def next_level():
         hero_group := SpriteGroup(),
         end_portal := SpriteGroup()
     ]
-    tile_images['empty'] = load_image(f'sprites/free{level}.png')
-    level_map = load_level(f"maps/map{level}.map")
-    hero, max_x, max_y = generate_level(level_map)
+    try:
+        tile_images['empty'] = load_image(f'sprites/free{level}.png')
+        level_map = load_level(f"maps/map{level}.map")
+        hero, max_x, max_y = generate_level(level_map)
+    except Exception:
+        level -= 1
+        with open('data/maps/progress.json', 'w') as file:
+            json.dump({"level": level}, file)
+        print('not found')
+        sys.exit()
 
 
 pygame.init()
@@ -125,8 +132,6 @@ class AnimatedSpriteHero(pygame.sprite.Sprite):
         self.pos = (x, y)
         self.rect = self.image.get_rect().move(
             tile_width * self.pos[0] + 5, tile_height * self.pos[1] + 5)
-        if level_map[self.pos[1]][self.pos[0]] == '%':
-            next_level()
 
 
 class AnimatedSpriteEndPortal(pygame.sprite.Sprite):
@@ -152,14 +157,41 @@ class AnimatedSpriteEndPortal(pygame.sprite.Sprite):
         self.image = self.frames[self.cur_frame]
 
 
+class AnimatedSpritePortal(pygame.sprite.Sprite):
+    def __init__(self, sheet, columns, rows, pos_x, pos_y, portal_index):
+        super().__init__(portal)
+        self.index = portal_index
+        self.frames = []
+        self.cut_sheet(sheet, columns, rows)
+        self.cur_frame = 0
+        self.image = self.frames[self.cur_frame]
+        self.rect = self.rect.move(tile_width * pos_x, tile_height * pos_y)
+        self.pos = (pos_x, pos_y)
+
+    def cut_sheet(self, sheet, columns, rows):
+        self.rect = pygame.Rect(0, 0, sheet.get_width() // columns,
+                                sheet.get_height() // rows)
+        for j in range(rows):
+            for i in range(columns):
+                frame_location = (self.rect.w * i, self.rect.h * j)
+                self.frames.append(sheet.subsurface(pygame.Rect(
+                    frame_location, self.rect.size)))
+
+    def update(self):
+        self.cur_frame = (self.cur_frame + 1) % len(self.frames)
+        self.image = self.frames[self.cur_frame]
+
+
 player = None
 running = True
 clock = pygame.time.Clock()
 sprite_groups = [
     sprite_group := SpriteGroup(),
     hero_group := SpriteGroup(),
-    end_portal := SpriteGroup()
+    end_portal := SpriteGroup(),
+    portal := SpriteGroup()
 ]
+portal_list = []
 
 
 def terminate():
@@ -220,6 +252,7 @@ def load_level(filename):
 
 def generate_level(level):
     new_player, x, y = None, None, None
+    global portal_list
     for y in range(len(level)):
         for x in range(len(level[y])):
             if level[y][x] == '.':
@@ -228,11 +261,15 @@ def generate_level(level):
                 Tile('wall', x, y)
             elif level[y][x] == '@':
                 Tile('empty', x, y)
-                new_player = AnimatedSpriteHero(load_image("sprites/player_animate.png"), 7, 2, x, y)
+                hero_group.add(AnimatedSpriteHero(load_image("sprites/player_animate.png"), 7, 2, x, y))
                 level_map[y][x] = "."
             elif level[y][x] == '%':
-                AnimatedSpriteEndPortal(load_image('sprites/end_portal_animate.png'), 6, 2, x, y)
+                end_portal.add(AnimatedSpriteEndPortal(load_image('sprites/end_portal_animate.png'), 6, 2, x, y))
                 level_map[y][x] = "%"
+            elif level[y][x] in '0123456789':
+                portal.add(AnimatedSpritePortal(load_image('sprites/portal_animate.png'), 4, 2, x, y, int(level[y][x])))
+                level_map[y][x] = level[y][x]
+                portal_list = [(x.index, x.pos) for x in sorted(portal, key=lambda x: x.index)]
     return new_player, x, y
 
 
@@ -241,23 +278,63 @@ def move(hero, movement):
     if movement == "up":
         if y > 0 and level_map[y - 1][x] == ".":
             hero.move(x, y - 1)
-        elif x < max_x - 1 and level_map[y - 1][x] == "%":
+        elif y > 0 - 1 and level_map[y - 1][x] == "%":
             hero.move(x, y - 1)
+            next_level()
+        elif y > 0 - 1 and level_map[y - 1][x] in "0123456789":
+            portal_index = int(level_map[y - 1][x])
+            if portal_index % 2 == 0:
+                print(portal_index, portal_list)
+                x, y = portal_list[portal_index + 1][1]
+            else:
+                x, y = portal_list[portal_index - 1][1]
+            if level_map[y - 1][x] == ".":
+                hero.move(x, y - 1)
     elif movement == "down":
         if y < max_y - 1 and level_map[y + 1][x] == ".":
             hero.move(x, y + 1)
-        elif x < max_x - 1 and level_map[y + 1][x] == "%":
+        elif y < max_y - 1 and level_map[y + 1][x] == "%":
             hero.move(x, y + 1)
+            next_level()
+        elif y < max_y - 1 and level_map[y + 1][x] in "0123456789":
+            portal_index = int(level_map[y + 1][x])
+            if portal_index % 2 == 0:
+                print(portal_index, portal_list)
+                x, y = portal_list[portal_index + 1][1]
+            else:
+                x, y = portal_list[portal_index - 1][1]
+            if level_map[y + 1][x] == ".":
+                hero.move(x, y + 1)
     elif movement == "left":
         if x > 0 and level_map[y][x - 1] == ".":
             hero.move(x - 1, y)
-        elif x < max_x - 1 and level_map[y][x - 1] == "%":
+        elif x > 0 - 1 and level_map[y][x - 1] == "%":
             hero.move(x - 1, y)
+            next_level()
+        elif x > 0 - 1 and level_map[y][x - 1] in "0123456789":
+            portal_index = int(level_map[y][x - 1])
+            if portal_index % 2 == 0:
+                print(portal_index, portal_list)
+                x, y = portal_list[portal_index + 1][1]
+            else:
+                x, y = portal_list[portal_index - 1][1]
+            if level_map[y][x - 1] == ".":
+                hero.move(x - 1, y)
     elif movement == "right":
         if x < max_x - 1 and level_map[y][x + 1] == ".":
             hero.move(x + 1, y)
         elif x < max_x - 1 and level_map[y][x + 1] == "%":
             hero.move(x + 1, y)
+            next_level()
+        elif x < max_x - 1 and level_map[y][x + 1] in "0123456789":
+            portal_index = int(level_map[y][x + 1])
+            if portal_index % 2 == 0:
+                print(portal_index, portal_list)
+                x, y = portal_list[portal_index + 1][1]
+            else:
+                x, y = portal_list[portal_index - 1][1]
+            if level_map[y][x + 1] == ".":
+                hero.move(x + 1, y)
 
 
 start_screen()
@@ -269,13 +346,17 @@ while running:
             running = False
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_UP:
-                move(hero, "up")
+                for hero in hero_group:
+                    move(hero, "up")
             elif event.key == pygame.K_DOWN:
-                move(hero, "down")
+                for hero in hero_group:
+                    move(hero, "down")
             elif event.key == pygame.K_LEFT:
-                move(hero, "left")
+                for hero in hero_group:
+                    move(hero, "left")
             elif event.key == pygame.K_RIGHT:
-                move(hero, "right")
+                for hero in hero_group:
+                    move(hero, "right")
     screen.fill(pygame.Color("black"))
     for group in sprite_groups:
         group.draw(screen)
@@ -283,6 +364,7 @@ while running:
         hero_group.update()
     if clock_counter % 3 == 0:
         end_portal.update()
+        portal.update()
     clock.tick(FPS)
     pygame.display.flip()
     clock_counter += 1
