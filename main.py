@@ -36,7 +36,8 @@ def next_level():
     global hero
     global max_x, max_y
     global tile_images
-    global sprite_groups, sprite_group, hero_group, end_portal
+    global sprite_groups, sprite_group, hero_group, end_portal, portal, active_walls, buttons
+    global portal_list, buttons_list, active_walls_list
     with open('data/maps/progress.json', 'w') as file:
         level += 1
         if level > 7:
@@ -46,8 +47,14 @@ def next_level():
     sprite_groups = [
         sprite_group := SpriteGroup(),
         hero_group := SpriteGroup(),
-        end_portal := SpriteGroup()
+        end_portal := SpriteGroup(),
+        portal := SpriteGroup(),
+        active_walls := SpriteGroup(),
+        buttons := SpriteGroup()
     ]
+    portal_list = []
+    buttons_list = []
+    active_walls_list = []
     try:
         tile_images['empty'] = load_image(f'sprites/free{level}.png')
         level_map = load_level(f"maps/map{level}.map")
@@ -99,14 +106,14 @@ class Sprite(pygame.sprite.Sprite):
 
 class Tile(Sprite):
     def __init__(self, tile_type, pos_x, pos_y):
-        super().__init__(sprite_group)
+        super().__init__(tile_group)
         self.image = tile_images[tile_type]
         self.rect = self.image.get_rect().move(
             tile_width * pos_x, tile_height * pos_y)
 
 
-class AnimatedSpriteHero(pygame.sprite.Sprite):
-    def __init__(self, sheet, columns, rows, pos_x, pos_y):
+class AnimatedSpriteHero(Sprite):
+    def __init__(self, sheet, columns, rows, pos_x, pos_y, reverse=False):
         super().__init__(hero_group)
         self.frames = []
         self.cut_sheet(sheet, columns, rows)
@@ -114,6 +121,7 @@ class AnimatedSpriteHero(pygame.sprite.Sprite):
         self.image = self.frames[self.cur_frame]
         self.rect = self.rect.move(tile_width * pos_x + 5, tile_height * pos_y + 5)
         self.pos = (pos_x, pos_y)
+        self.reverse = reverse
 
     def cut_sheet(self, sheet, columns, rows):
         self.rect = pygame.Rect(0, 0, sheet.get_width() // columns,
@@ -134,7 +142,7 @@ class AnimatedSpriteHero(pygame.sprite.Sprite):
             tile_width * self.pos[0] + 5, tile_height * self.pos[1] + 5)
 
 
-class AnimatedSpriteEndPortal(pygame.sprite.Sprite):
+class AnimatedSpriteEndPortal(Sprite):
     def __init__(self, sheet, columns, rows, pos_x, pos_y):
         super().__init__(end_portal)
         self.frames = []
@@ -182,16 +190,63 @@ class AnimatedSpritePortal(pygame.sprite.Sprite):
         self.image = self.frames[self.cur_frame]
 
 
+class Button(Sprite):
+    def __init__(self, image, pos_x, pos_y):
+        super().__init__(buttons)
+        self.image = image
+        self.rect = self.image.get_rect().move(
+            tile_width * pos_x, tile_height * pos_y)
+        self.pos = (pos_x, pos_y)
+
+    def update(self):
+        hero_poses = set([x.pos for x in hero_group])
+        buttons_poses = set([x[0] for x in buttons_list])
+        pos_set = hero_poses & buttons_poses
+        if pos_set and all(map(lambda x: x[1] == 0, buttons_list)):
+            buttons_list[0][1] = 1
+            print(1)
+        elif not pos_set and any(map(lambda x: x[1] == 1, buttons_list)):
+            for ind, butt in enumerate(buttons_list):
+                buttons_list[ind][1] = 0
+            print(0)
+
+
+class ActiveWall(Sprite):
+    def __init__(self, image, pos_x, pos_y):
+        super().__init__(active_walls)
+        self.image = image
+        self.rect = self.image.get_rect().move(
+            tile_width * pos_x, tile_height * pos_y)
+        self.active = 0
+
+    def update(self):
+        global active_walls
+        if any(map(lambda x: x[1] == 1, buttons_list)) and self.active == 0:
+            for x, y in active_walls_list:
+                self.image = load_image(f'sprites/free{level}.png')
+                level_map[y][x] = "."
+                self.active = 1
+        elif all(map(lambda x: x[1] == 0, buttons_list)) and self.active == 1:
+            for x, y in active_walls_list:
+                self.image = load_image('sprites/active_wall.png')
+                level_map[y][x] = "/"
+                self.active = 0
+
+
 player = None
 running = True
 clock = pygame.time.Clock()
 sprite_groups = [
-    sprite_group := SpriteGroup(),
-    hero_group := SpriteGroup(),
+    tile_group := SpriteGroup(),
     end_portal := SpriteGroup(),
-    portal := SpriteGroup()
+    portal := SpriteGroup(),
+    active_walls := SpriteGroup(),
+    buttons := SpriteGroup(),
+    hero_group := SpriteGroup()
 ]
 portal_list = []
+buttons_list = []
+active_walls_list = []
 
 
 def terminate():
@@ -257,54 +312,92 @@ def generate_level(level):
         for x in range(len(level[y])):
             if level[y][x] == '.':
                 Tile('empty', x, y)
+
             elif level[y][x] == '#':
                 Tile('wall', x, y)
+
             elif level[y][x] == '@':
                 Tile('empty', x, y)
                 hero_group.add(AnimatedSpriteHero(load_image("sprites/player_animate.png"), 7, 2, x, y))
                 level_map[y][x] = "."
+            elif level[y][x] == '&':
+                Tile('empty', x, y)
+                hero_group.add(AnimatedSpriteHero(load_image("sprites/player_animate.png"), 7, 2, x, y, reverse=True))
+                level_map[y][x] = "."
+
             elif level[y][x] == '%':
                 end_portal.add(AnimatedSpriteEndPortal(load_image('sprites/end_portal_animate.png'), 6, 2, x, y))
                 level_map[y][x] = "%"
+
             elif level[y][x] in '0123456789':
                 portal.add(AnimatedSpritePortal(load_image('sprites/portal_animate.png'), 4, 2, x, y, int(level[y][x])))
                 level_map[y][x] = level[y][x]
                 portal_list = [(x.index, x.pos) for x in sorted(portal, key=lambda x: x.index)]
+
+            elif level[y][x] == '*':
+                buttons.add(Button(load_image('sprites/button.png'), x, y))
+                level_map[y][x] = "*"
+                buttons_list.append([(x, y), 0])
+            elif level[y][x] == '/':
+                active_walls.add(ActiveWall(load_image('sprites/active_wall.png'), x, y))
+                level_map[y][x] = "/"
+                active_walls_list.append((x, y))
+
     return new_player, x, y
 
 
 def move(hero, movement):
     x, y = hero.pos
+    if hero.reverse:
+        if movement == "up":
+            movement = 'down'
+        elif movement == 'down':
+            movement = 'up'
+        elif movement == 'right':
+            movement = 'left'
+        else:
+            movement = 'right'
+
     if movement == "up":
         if y > 0 and level_map[y - 1][x] == ".":
             hero.move(x, y - 1)
+
         elif y > 0 - 1 and level_map[y - 1][x] == "%":
             hero.move(x, y - 1)
             next_level()
+
         elif y > 0 - 1 and level_map[y - 1][x] in "0123456789":
             portal_index = int(level_map[y - 1][x])
             if portal_index % 2 == 0:
-                print(portal_index, portal_list)
                 x, y = portal_list[portal_index + 1][1]
             else:
                 x, y = portal_list[portal_index - 1][1]
             if level_map[y - 1][x] == ".":
                 hero.move(x, y - 1)
+
+        elif y > 0 - 1 and level_map[y - 1][x] == "*":
+            hero.move(x, y - 1)
+
     elif movement == "down":
         if y < max_y - 1 and level_map[y + 1][x] == ".":
             hero.move(x, y + 1)
+
         elif y < max_y - 1 and level_map[y + 1][x] == "%":
             hero.move(x, y + 1)
             next_level()
+
         elif y < max_y - 1 and level_map[y + 1][x] in "0123456789":
             portal_index = int(level_map[y + 1][x])
             if portal_index % 2 == 0:
-                print(portal_index, portal_list)
                 x, y = portal_list[portal_index + 1][1]
             else:
                 x, y = portal_list[portal_index - 1][1]
             if level_map[y + 1][x] == ".":
                 hero.move(x, y + 1)
+
+        elif y < max_y - 1 and level_map[y + 1][x] == "*":
+            hero.move(x, y + 1)
+
     elif movement == "left":
         if x > 0 and level_map[y][x - 1] == ".":
             hero.move(x - 1, y)
@@ -314,12 +407,15 @@ def move(hero, movement):
         elif x > 0 - 1 and level_map[y][x - 1] in "0123456789":
             portal_index = int(level_map[y][x - 1])
             if portal_index % 2 == 0:
-                print(portal_index, portal_list)
                 x, y = portal_list[portal_index + 1][1]
             else:
                 x, y = portal_list[portal_index - 1][1]
             if level_map[y][x - 1] == ".":
                 hero.move(x - 1, y)
+
+        elif x > 0 and level_map[y][x - 1] == "*":
+            hero.move(x - 1, y)
+
     elif movement == "right":
         if x < max_x - 1 and level_map[y][x + 1] == ".":
             hero.move(x + 1, y)
@@ -329,12 +425,14 @@ def move(hero, movement):
         elif x < max_x - 1 and level_map[y][x + 1] in "0123456789":
             portal_index = int(level_map[y][x + 1])
             if portal_index % 2 == 0:
-                print(portal_index, portal_list)
                 x, y = portal_list[portal_index + 1][1]
             else:
                 x, y = portal_list[portal_index - 1][1]
             if level_map[y][x + 1] == ".":
                 hero.move(x + 1, y)
+
+        elif x < max_x - 1 and level_map[y][x + 1] == "*":
+            hero.move(x + 1, y)
 
 
 start_screen()
@@ -361,8 +459,10 @@ while running:
     for group in sprite_groups:
         group.draw(screen)
     if clock_counter % 5 == 0:
+        active_walls.update()
         hero_group.update()
     if clock_counter % 3 == 0:
+        buttons.update()
         end_portal.update()
         portal.update()
     clock.tick(FPS)
