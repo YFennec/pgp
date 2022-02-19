@@ -14,6 +14,7 @@ except Exception:
         level = 1
 
 pygame.init()
+pygame.display.set_caption('Seven')
 screen_size = (1050, 800)
 screen = pygame.display.set_mode(screen_size)
 FPS = 50
@@ -45,12 +46,24 @@ particles_groups = [
 portal_list = []
 buttons_list = []
 active_walls_list = []
+sounds = [
+    move_sound := pygame.mixer.Sound('data/sounds/move.mp3'),
+    teleport_sound := pygame.mixer.Sound('data/sounds/teleport.mp3'),
+    button_pressed_sound := pygame.mixer.Sound('data/sounds/button pressed.mp3'),
+    button_unpressed_sound := pygame.mixer.Sound('data/sounds/button unpressed.mp3'),
+    next_level_sound := pygame.mixer.Sound('data/sounds/next level.mp3')
+]
+music = pygame.mixer.music
+music.load('data/sounds/main theme.mp3')
+music.set_volume(0.5)
+music.play()
 
 
 def groups_load():
     global sprite_groups, tile_group, hero_group, end_portal, portal, active_walls, buttons
     global portal_list, buttons_list, active_walls_list
     global particles_groups, portal_particles, player_particles
+    global sounds, move_sound, teleport_sound, button_unpressed_sound, button_pressed_sound, next_level_sound
     sprite_groups = [
         tile_group := SpriteGroup(),
         end_portal := SpriteGroup(),
@@ -62,6 +75,13 @@ def groups_load():
     particles_groups = [
         portal_particles := SpriteGroup(),
         player_particles := SpriteGroup()
+    ]
+    sounds = [
+        move_sound := pygame.mixer.Sound('data/sounds/move.mp3'),
+        teleport_sound := pygame.mixer.Sound('data/sounds/teleport.mp3'),
+        button_pressed_sound := pygame.mixer.Sound('data/sounds/button pressed.mp3'),
+        button_unpressed_sound := pygame.mixer.Sound('data/sounds/button unpressed.mp3'),
+        next_level_sound := pygame.mixer.Sound('data/sounds/next level.mp3')
     ]
     portal_list = []
     buttons_list = []
@@ -94,6 +114,7 @@ def next_level():
         tile_images['empty'] = load_image(f'sprites/free{level}.png')
         level_map = load_level(f"maps/map{level}.map")
         hero, max_x, max_y = generate_level(level_map)
+        next_level_sound.play()
     except Exception:
         level -= 1
         with open('data/maps/progress.json', 'w') as file:
@@ -225,9 +246,11 @@ class Button(Sprite):
         pos_set = hero_poses & buttons_poses
         if pos_set and all(map(lambda x: x[1] == 0, buttons_list)):
             buttons_list[0][1] = 1
+            button_pressed_sound.play()
         elif not pos_set and any(map(lambda x: x[1] == 1, buttons_list)):
             for ind, butt in enumerate(buttons_list):
                 buttons_list[ind][1] = 0
+                button_unpressed_sound.play()
 
 
 class ActiveWall(Sprite):
@@ -459,10 +482,12 @@ def move(hero, movement):
         if y > 0 and level_map[y - 1][x] == ".":
             hero.move(x, y - 1)
             create_player_particles((x, y), movement)
+            move_sound.play()
 
         elif y > 0 - 1 and level_map[y - 1][x] == "%":
             hero.move(x, y - 1)
             create_player_particles((x, y), movement)
+            move_sound.play()
             next_level()
 
         elif y > 0 - 1 and level_map[y - 1][x] in "0123456789":
@@ -474,19 +499,24 @@ def move(hero, movement):
             if level_map[y - 1][x] in ".*":
                 hero.move(x, y - 1)
                 create_player_particles((x, y), movement)
+                move_sound.play()
+                teleport_sound.play()
 
         elif y > 0 - 1 and level_map[y - 1][x] == "*":
             hero.move(x, y - 1)
             create_player_particles((x, y), movement)
+            move_sound.play()
 
     elif movement == "down":
         if y < max_y - 1 and level_map[y + 1][x] == ".":
             hero.move(x, y + 1)
             create_player_particles((x, y), movement)
+            move_sound.play()
 
         elif y < max_y - 1 and level_map[y + 1][x] == "%":
             hero.move(x, y + 1)
             create_player_particles((x, y), movement)
+            move_sound.play()
             next_level()
 
         elif y < max_y - 1 and level_map[y + 1][x] in "0123456789":
@@ -498,19 +528,24 @@ def move(hero, movement):
             if level_map[y + 1][x] in ".*":
                 hero.move(x, y + 1)
                 create_player_particles((x, y), movement)
+                move_sound.play()
+                teleport_sound.play()
 
         elif y < max_y - 1 and level_map[y + 1][x] == "*":
             hero.move(x, y + 1)
             create_player_particles((x, y), movement)
+            move_sound.play()
 
     elif movement == "left":
         if x > 0 and level_map[y][x - 1] == ".":
             hero.move(x - 1, y)
             create_player_particles((x, y), movement)
+            move_sound.play()
 
         elif x > 0 - 1 and level_map[y][x - 1] == "%":
             hero.move(x - 1, y)
             create_player_particles((x, y), movement)
+            move_sound.play()
             next_level()
 
         elif x > 0 - 1 and level_map[y][x - 1] in "0123456789":
@@ -522,19 +557,24 @@ def move(hero, movement):
             if level_map[y][x - 1] in ".*":
                 hero.move(x - 1, y)
                 create_player_particles((x, y), movement)
+                move_sound.play()
+                teleport_sound.play()
 
         elif x > 0 and level_map[y][x - 1] == "*":
             hero.move(x - 1, y)
             create_player_particles((x, y), movement)
+            move_sound.play()
 
     elif movement == "right":
         if x < max_x - 1 and level_map[y][x + 1] == ".":
             hero.move(x + 1, y)
             create_player_particles((x, y), movement)
+            move_sound.play()
 
         elif x < max_x - 1 and level_map[y][x + 1] == "%":
             hero.move(x + 1, y)
             create_player_particles((x, y), movement)
+            move_sound.play()
             next_level()
 
         elif x < max_x - 1 and level_map[y][x + 1] in "0123456789":
@@ -546,16 +586,20 @@ def move(hero, movement):
             if level_map[y][x + 1] in ".*":
                 hero.move(x + 1, y)
                 create_player_particles((x, y), movement)
+                move_sound.play()
+                teleport_sound.play()
 
         elif x < max_x - 1 and level_map[y][x + 1] == "*":
             hero.move(x + 1, y)
             create_player_particles((x, y), movement)
+            move_sound.play()
 
 
 start_screen()
 level_map = load_level(f"maps/map{level}.map")
 hero, max_x, max_y = generate_level(level_map)
 while running:
+    music.set_volume(0.3)
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
